@@ -1,5 +1,5 @@
 {
-    "name": "smtp_process",
+    "name": "smtp-process",
     "version": "1.0.0",
     "description": "smtp process",
     "main": "index.js",
@@ -24,7 +24,14 @@
     "devDependencies": {
         "eslint": "^7.0.0",
         "eslint-config-airbnb-base": "^14.0.0",
+        "eslint-config-prettier": "^8.1.0",
         "eslint-plugin-import": "^2.18.2",
-        "nodemon": "^2.0.0"
+        "eslint-plugin-prettier": "^3.1.1",
+        "eslint-plugin-security": "^1.4.0",
+        "lint-staged": "^11.0.0",
+        "modclean-patterns-default": "^1.1.2",
+        "nodemon": "^2.0.0",
+        "serverless-dotenv-plugin": "^6.0.0",
+        "serverless-offline": "^14.4.0"
     }
 }
