@@ -1,20 +1,39 @@
-const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, SendMessageCommand, GetQueueUrlCommand } = require('@aws-sdk/client-sqs');
+const AWS = require('aws-sdk');
+const https = require('https');
 const config = require('../config/config');
 const logger = require('../config/logger');
+
+// Create a connection pool for better performance
+const agent = new https.Agent({
+    keepAlive: true,
+    maxSockets: 50,
+    rejectUnauthorized: true
+});
 
 /**
  * AWS SQS Service for polling messages
  */
 class SQSService {
     constructor() {
-        this.client = new SQSClient({
-            region: config.aws.CUSTOM_AWS_REGION,
-            credentials: {
+        try {
+            // Configure AWS SDK v2 for maximum performance
+            this.sqs = new AWS.SQS({
+                region: config.aws.CUSTOM_AWS_REGION,
                 accessKeyId: config.aws.CUSTOM_AWS_ACCESS_KEY,
                 secretAccessKey: config.aws.CUSTOM_AWS_SECRET_ACCESS,
-            },
-        });
-        this.queueUrl = null;
+                apiVersion: '2012-11-05',
+                maxRetries: 1,
+                httpOptions: {
+                    timeout: 2000,
+                    connectTimeout: 1000,
+                    agent  // Use the shared connection pool
+                }
+            });
+            this.queueUrl = null;
+        } catch (error) {
+            logger.error({ error: error.message }, 'Failed to initialize SQS client');
+            throw error;
+        }
     }
 
     /**
@@ -29,10 +48,10 @@ class SQSService {
             } else {
                 // Try to get queue URL using AWS API (more reliable)
                 try {
-                    const command = new GetQueueUrlCommand({
-                        QueueName: config.aws.SQS_QUEUE_NAME,
-                    });
-                    const response = await this.client.send(command);
+                    const params = {
+                        QueueName: config.aws.SQS_QUEUE_NAME
+                    };
+                    const response = await this.sqs.getQueueUrl(params).promise();
                     this.queueUrl = response.QueueUrl;
                 } catch (apiError) {
                     // Fallback to URL construction if API call fails
@@ -59,15 +78,15 @@ class SQSService {
         }
 
         try {
-            const command = new ReceiveMessageCommand({
+            const params = {
                 QueueUrl: this.queueUrl,
                 MaxNumberOfMessages: Math.min(maxMessages, 10),
                 WaitTimeSeconds: waitTimeSeconds,
                 MessageAttributeNames: ['All'],
                 AttributeNames: ['All'],
-            });
+            };
 
-            const response = await this.client.send(command);
+            const response = await this.sqs.receiveMessage(params).promise();
 
             if (response.Messages && response.Messages.length > 0) {
                 logger.debug(
@@ -93,12 +112,12 @@ class SQSService {
         }
 
         try {
-            const command = new DeleteMessageCommand({
+            const params = {
                 QueueUrl: this.queueUrl,
                 ReceiptHandle: receiptHandle,
-            });
+            };
 
-            await this.client.send(command);
+            await this.sqs.deleteMessage(params).promise();
             logger.debug({ receiptHandle }, 'Deleted message from SQS');
         } catch (error) {
             logger.error({ error: error.message, receiptHandle }, 'Failed to delete message from SQS');
@@ -125,13 +144,24 @@ class SQSService {
                 targetUrl = `https://sqs.${config.aws.CUSTOM_AWS_REGION}.amazonaws.com/${config.aws.CUSTOM_AWS_ACCOUNT_ID || ''}/${dlqUrl}`;
             }
 
-            const command = new SendMessageCommand({
-                QueueUrl: targetUrl,
-                MessageBody: typeof messageBody === 'string' ? messageBody : JSON.stringify(messageBody),
-                MessageAttributes: messageAttributes,
+            // Convert messageAttributes to AWS SDK v2 format
+            const sqsAttributes = {};
+            Object.keys(messageAttributes).forEach(key => {
+                sqsAttributes[key] = {
+                    DataType: 'String',
+                    StringValue: typeof messageAttributes[key] === 'string'
+                        ? messageAttributes[key]
+                        : JSON.stringify(messageAttributes[key])
+                };
             });
 
-            await this.client.send(command);
+            const params = {
+                QueueUrl: targetUrl,
+                MessageBody: typeof messageBody === 'string' ? messageBody : JSON.stringify(messageBody),
+                MessageAttributes: Object.keys(sqsAttributes).length > 0 ? sqsAttributes : undefined,
+            };
+
+            await this.sqs.sendMessage(params).promise();
             logger.info({ dlqUrl: targetUrl }, 'Message sent to dead-letter queue');
         } catch (error) {
             logger.error({ error: error.message }, 'Failed to send message to DLQ');
@@ -149,12 +179,18 @@ class SQSService {
             const body = JSON.parse(sqsMessage.Body);
             const attributes = sqsMessage.MessageAttributes || {};
 
+            // Handle AWS SDK v2 attribute format (nested StringValue)
+            const getAttributeValue = (attr) => {
+                if (!attr) return null;
+                return attr.StringValue || attr.stringValue || attr;
+            };
+
             return {
                 receiptHandle: sqsMessage.ReceiptHandle,
                 messageId: sqsMessage.MessageId,
                 body: body,
-                to: attributes.to?.StringValue || body.to,
-                subject: attributes.subject?.StringValue || body.subject,
+                to: getAttributeValue(attributes.to) || body.to,
+                subject: getAttributeValue(attributes.subject) || body.subject,
                 content: body.content || body.html || body.text || body.body,
                 contentType: body.contentType || (body.html ? 'html' : 'text'),
                 metadata: {
@@ -171,4 +207,3 @@ class SQSService {
 }
 
 module.exports = new SQSService();
-
