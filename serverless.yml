@@ -1,0 +1,50 @@
+service: processEvents
+package:
+  patterns:
+    - '!node_modules/**'
+    - '!.git/**'
+    - '!.env*'
+    - '!*.log'
+    - '!tests/**'
+    - 'index.js'
+    - 'package.json'
+provider:
+  name: aws
+  runtime: nodejs22.x  # change this to match your Lambda's runtime
+  region: ap-south-1   # update to your desired region
+  role: arn:aws:iam::014498623548:role/service-role/processSqsEvent
+  environment:
+    NODE_ENV: ${opt:stage, 'dev'}
+    PORT: ${env:PORT, '8000'}
+    MONGODB_URL: ${env:MONGODB_URL}
+    CUSTOM_AWS_ACCESS_KEY: ${env:CUSTOM_AWS_ACCESS_KEY}
+    CUSTOM_AWS_SECRET_ACCESS: ${env:CUSTOM_AWS_SECRET_ACCESS}
+    CUSTOM_AWS_REGION: ${env:CUSTOM_AWS_REGION, 'ap-south-1'}
+    BUCKET_NAME: ${env:BUCKET_NAME, 'marketermailone'}
+    CONTACT_BUCKET_NAME: ${env:CONTACT_BUCKET_NAME, 'marketermailone'}
+    SERVER_URL: ${env:SERVER_URL}
+    SECRET_KEY: ${env:SECRET_KEY}
+    UNSUBSCRIBE_SECRET_KEY: ${env:UNSUBSCRIBE_SECRET_KEY}
+    FORWARD_SECRET_KEY: ${env:FORWARD_SECRET_KEY}
+    LINK_SALT: ${env:LINK_SALT}
+    FRONTEND_URL: ${env:FRONTEND_URL, 'http://marketercampaigner.s3-website.ap-south-1.amazonaws.com'}
+    JWT_SECRET: ${env:JWT_SECRET}
+    JWT_ACCESS_EXPIRATION_MINUTES: ${env:JWT_ACCESS_EXPIRATION_MINUTES, '480'}
+    JWT_REFRESH_EXPIRATION_DAYS: ${env:JWT_REFRESH_EXPIRATION_DAYS, '30'}
+    JWT_RESET_PASSWORD_EXPIRATION_MINUTES: ${env:JWT_RESET_PASSWORD_EXPIRATION_MINUTES, '10'}
+    JWT_VERIFY_EMAIL_EXPIRATION_MINUTES: ${env:JWT_VERIFY_EMAIL_EXPIRATION_MINUTES, '10'}
+    SQS_QUEUE_NAME: ${env:SQS_QUEUE_NAME}
+    SQS_SMTP_QUEUE_NAME: ${env:SQS_SMTP_QUEUE_NAME}
+
+  layers:
+    - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:commonModules:21
+    - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:utilityModules:9
+
+functions:
+  app:
+    handler: index.handler  # adjust this to match your entry point
+    timeout: 900            # optional
+    memorySize: 3008        # optional
+
+plugins:
+  - serverless-offline     # optional, for local testing
