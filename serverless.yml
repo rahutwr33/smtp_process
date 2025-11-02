@@ -1,4 +1,4 @@
-service: smtp_process
+service: smtp-process
 package:
   patterns:
     - "!node_modules/**"
@@ -12,7 +12,7 @@ provider:
   name: aws
   runtime: nodejs22.x # change this to match your Lambda's runtime
   region: ap-south-1 # update to your desired region
-  role: arn:aws:iam::014498623548:role/service-role/smtp_process
+  role: arn:aws:iam::014498623548:role/service-role/processSqsEvent
   environment:
     NODE_ENV: ${opt:stage, 'dev'}
     PORT: ${env:PORT, '8000'}
@@ -43,8 +43,21 @@ provider:
 functions:
   app:
     handler: index.handler # adjust this to match your entry point
-    timeout: 900 # optional
-    memorySize: 3008 # optional
+    timeout: 900 # 15 minutes max for Lambda
+    memorySize: 3008 # 3GB for high throughput
+    reservedConcurrentExecutions: 5 # Limit concurrent executions (recommended: 3-5 for FIFO queue)
+    events:
+      # CloudWatch Events (EventBridge) cron trigger
+      # Lambda will pull messages from FIFO queue on each trigger
+      - schedule:
+          rate: rate(1 minute) # Recommended: every 1 minute for 35 emails/sec throughput
+          # Alternative rates:
+          # rate(30 seconds) - for higher throughput or to keep queue depth low
+          # rate(2 minutes) - for lower throughput
+          # cron(*/1 * * * ? *) - every minute (alternative syntax)
+          enabled: true
+          input:
+            trigger: "cron"
 
 plugins:
   - serverless-offline # optional, for local testing
