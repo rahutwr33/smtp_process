@@ -1,18 +1,18 @@
-service: processEvents
+service: smtp_process
 package:
   patterns:
-    - '!node_modules/**'
-    - '!.git/**'
-    - '!.env*'
-    - '!*.log'
-    - '!tests/**'
-    - 'index.js'
-    - 'package.json'
+    - "!node_modules/**"
+    - "!.git/**"
+    - "!.env*"
+    - "!*.log"
+    - "!tests/**"
+    - "index.js"
+    - "package.json"
 provider:
   name: aws
-  runtime: nodejs22.x  # change this to match your Lambda's runtime
-  region: ap-south-1   # update to your desired region
-  role: arn:aws:iam::014498623548:role/service-role/processSqsEvent
+  runtime: nodejs22.x # change this to match your Lambda's runtime
+  region: ap-south-1 # update to your desired region
+  role: arn:aws:iam::014498623548:role/service-role/smtp_process
   environment:
     NODE_ENV: ${opt:stage, 'dev'}
     PORT: ${env:PORT, '8000'}
@@ -42,9 +42,9 @@ provider:
 
 functions:
   app:
-    handler: index.handler  # adjust this to match your entry point
-    timeout: 900            # optional
-    memorySize: 3008        # optional
+    handler: index.handler # adjust this to match your entry point
+    timeout: 900 # optional
+    memorySize: 3008 # optional
 
 plugins:
-  - serverless-offline     # optional, for local testing
+  - serverless-offline # optional, for local testing
